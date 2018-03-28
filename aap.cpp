@@ -54,13 +54,12 @@ char BackBuffer[SCREEN_Y][SCREEN_X] = {};
 
 int main()
 {
-    v3 cameraOrigin = {1,1,1};
+    v3 cameraOrigin = {0.0f, 0.5f , -10.0f};
     f32 maxRayDistance = 256.0f;
 
     while(1)
     {
-
-    printf("%f %f %f\n", cameraOrigin.x, cameraOrigin.y, cameraOrigin.z);
+        memset(BackBuffer, 0, sizeof(BackBuffer));
 
     for(u32 y = 0;
             y < ScreenSize.y;
@@ -102,7 +101,6 @@ int main()
 
                 u32 charIndex = distance / colorStep;
                 
-//                printf("%f %f %d %f\n", colorStep, distance, charIndex, t);
                 BackBuffer[y][x] = AsciiGradient[charIndex];
             }
         }
