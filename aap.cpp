@@ -45,7 +45,7 @@ sphere Spheres[] = {
     { v3(0.0f, 0.0f, 0.0f), 4.0f }
 };
 
-#define SCREEN_X 50
+#define SCREEN_X 150
 #define SCREEN_Y 50
 static const iv2 ScreenSize = {SCREEN_X, SCREEN_Y};
 
@@ -71,9 +71,9 @@ void ClearBackBuffer()
 static inline
 void SwapBackBuffers()
 {
-    for(s32 y = ScreenSize.y - 1;
-            y >= 0;
-            y--)
+    for(u32 y = 0;
+            y < ScreenSize.y;
+            y++)
     {
         for(u32 x = 0;
                 x < ScreenSize.x;
@@ -117,6 +117,18 @@ f32 MinF32(f32 a, f32 b)
 static inline
 void RaycastScene(v3 cameraOrigin)
 {
+    v3 aspectRatioFix = {1.0f, 1.0f, 1.0f};
+
+    if(ScreenSize.x > ScreenSize.y)
+    {
+        aspectRatioFix.y = static_cast<f32>(ScreenSize.y) / static_cast<f32>(ScreenSize.x);
+    }
+    else if(ScreenSize.y > ScreenSize.x)
+    {
+        aspectRatioFix.x = static_cast<f32>(ScreenSize.x) / static_cast<f32>(ScreenSize.y);
+    }
+
+    printf("ARF %f %f\n", aspectRatioFix.x, aspectRatioFix.y);
 
     for(u32 y = 0;
             y < ScreenSize.y;
@@ -126,20 +138,18 @@ void RaycastScene(v3 cameraOrigin)
                 x < ScreenSize.x;
                 x++)
         {
-            v2 homogenousScreenCoord = {
-                (2.0f * (static_cast<f32>(x) / static_cast<f32>(ScreenSize.x)) - 1.0f),
-                (2.0f * (static_cast<f32>(y) / static_cast<f32>(ScreenSize.y)) - 1.0f)
-            };
-
             v3 rayDirection = {
-                homogenousScreenCoord.x,
-                homogenousScreenCoord.y,
+                static_cast<f32>(x),
+                static_cast<f32>(y),
                 1.0f
             };
 
-            rayDirection = glm::normalize(rayDirection);
+            rayDirection /= v3(ScreenSize.x, ScreenSize.y, 1.0f);
+            rayDirection = (rayDirection * 2.0f) - 1.0f;
 
-#if 0
+            rayDirection.y *= -1.0f;
+            rayDirection *= aspectRatioFix;
+
             for(u32 planeIndex = 0;
                     planeIndex < ARRAY_SIZE(Planes);
                     planeIndex++)
@@ -156,7 +166,6 @@ void RaycastScene(v3 cameraOrigin)
 
                 BackBuffer[y][x] = GetAsciiChar(t);
             }
-#endif
 
             for(u32 sphereIndex = 0;
                     sphereIndex < ARRAY_SIZE(Spheres);
@@ -169,16 +178,16 @@ void RaycastScene(v3 cameraOrigin)
                 v3 cameraOriginRelativeToSphere = cameraOrigin - sph.Origin;
 
                 f32 a = glm::dot(rayDirection, rayDirection);
-                if(a == 0) continue;
+                if(a == 0.0f) continue;
 
-                f32 b = 2 * glm::dot(cameraOriginRelativeToSphere, rayDirection);
+                f32 b = 2.0f * glm::dot(cameraOriginRelativeToSphere, rayDirection);
                 f32 c = glm::dot(cameraOriginRelativeToSphere, cameraOriginRelativeToSphere) - sph.SquaredRadius;
 
-                f32 det = (b*b) - (4 * a * c);
-                if(0 > det) continue;
+                f32 det = (b*b) - (4.0f * a * c);
+                if(0.0f > det) continue;
                 f32 detSquareRoot = glm::sqrt(det);
 
-                f32 denom = 2 * a;
+                f32 denom = 2.0f * a;
 
                 f32 t1 = (-b + detSquareRoot) / denom;
                 f32 t2 = (-b - detSquareRoot) / denom;
@@ -186,9 +195,8 @@ void RaycastScene(v3 cameraOrigin)
                 if(!IsValidT(t2)) t2 = FLT_MAX;
                 if(!IsValidT(t1)) t1 = FLT_MAX;
 
-                if(t1 == FLT_MAX && t2 == FLT_MAX) continue;
                 f32 t = MinF32(t1, t2);
-                char ch = GetAsciiChar(t);
+                if(t == FLT_MAX) continue;
 
                 BackBuffer[y][x] = GetAsciiChar(t);
             }
@@ -198,7 +206,7 @@ void RaycastScene(v3 cameraOrigin)
 
 int main()
 {
-    v3 cameraOrigin = {-10.0f, 0.0f , -10.0f};
+    v3 cameraOrigin = {0.0f, 0.0f , -10.0f};
 
     while(1)
     {
@@ -206,7 +214,13 @@ int main()
         RaycastScene(cameraOrigin);
         SwapBackBuffers();
 
-        getchar();
-        cameraOrigin.y -= 1.0f;
+        char c = getchar();
+
+        if(c == 'w') cameraOrigin.z += 1.0f;
+        if(c == 's') cameraOrigin.z -= 1.0f;
+        if(c == 'd') cameraOrigin.x += 1.0f;
+        if(c == 'a') cameraOrigin.x -= 1.0f;
+        if(c == 'q') cameraOrigin.y += 1.0f;
+        if(c == 'e') cameraOrigin.y -= 1.0f;
     }
 }
