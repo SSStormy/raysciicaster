@@ -23,6 +23,7 @@ using s16 = int16_t;
 using s32 = int32_t;
 using s64 = int64_t;
 
+#define ARRAY_SIZE(M__ARRAY) (sizeof(M__ARRAY[0])/sizeof(M__ARRAY))
 
 struct plane
 {
@@ -30,14 +31,22 @@ struct plane
     f32 Dist;
 };
 
-#define ARRAY_SIZE(M__ARRAY) (sizeof(M__ARRAY[0])/sizeof(M__ARRAY))
-
-plane Planes[] = {
-    { v3(0.0f, 1.0f, 0.0f), 0 }
+struct sphere
+{
+    v3 Origin;
+    f32 SquaredRadius;
 };
 
-#define SCREEN_X 150
-#define SCREEN_Y 40
+plane Planes[] = {
+    { v3(0.0f, 1.0f, 0.0f), 0.0f }
+};
+
+sphere Spheres[] = {
+    { v3(0.0f, 0.0f, 0.0f), 4.0f }
+};
+
+#define SCREEN_X 50
+#define SCREEN_Y 50
 static const iv2 ScreenSize = {SCREEN_X, SCREEN_Y};
 
 const char AsciiGradient[] = 
@@ -52,14 +61,62 @@ const u32 AsciiGradientSize = sizeof(AsciiGradient) - 1;
 
 char BackBuffer[SCREEN_Y][SCREEN_X] = {};
 
-int main()
+static inline
+void ClearBackBuffer()
 {
-    v3 cameraOrigin = {0.0f, 0.5f , -10.0f};
-    f32 maxRayDistance = 256.0f;
+    printf("\033c");
+    memset(BackBuffer, 0, sizeof(BackBuffer));
+}
 
-    while(1)
+static inline
+void SwapBackBuffers()
+{
+    for(s32 y = ScreenSize.y - 1;
+            y >= 0;
+            y--)
     {
-        memset(BackBuffer, 0, sizeof(BackBuffer));
+        for(u32 x = 0;
+                x < ScreenSize.x;
+                x++)
+        {
+            putchar(BackBuffer[y][x]);
+        }
+        putchar('\n');
+    }
+}
+
+static const f32 maxRayDistance = 256.0f;
+
+static inline
+char GetAsciiChar(f32 t)
+{
+    static const f32 colorStep = 1.0f / AsciiGradientSize;
+    f32 distance = t / maxRayDistance;
+
+    u32 charIndex = distance / colorStep;
+    
+    if(charIndex > AsciiGradientSize)
+        return AsciiGradient[AsciiGradientSize];
+
+    return AsciiGradient[charIndex];
+}
+
+static inline
+b32 IsValidT(f32 t)
+{
+    return t > 0 && maxRayDistance >= t;
+}
+
+static inline
+f32 MinF32(f32 a, f32 b)
+{
+    if(a > b) return b;
+    return a;
+}
+
+static inline
+void RaycastScene(v3 cameraOrigin)
+{
 
     for(u32 y = 0;
             y < ScreenSize.y;
@@ -82,6 +139,7 @@ int main()
 
             rayDirection = glm::normalize(rayDirection);
 
+#if 0
             for(u32 planeIndex = 0;
                     planeIndex < ARRAY_SIZE(Planes);
                     planeIndex++)
@@ -94,27 +152,61 @@ int main()
 
                 f32 t = topDot / botDot;
 
-                if(t > maxRayDistance || 0 >= t) continue;
+                if(!IsValidT(t)) continue;
 
-                const f32 colorStep = 1.0f / AsciiGradientSize;
-                f32 distance = t / maxRayDistance;
+                BackBuffer[y][x] = GetAsciiChar(t);
+            }
+#endif
 
-                u32 charIndex = distance / colorStep;
+            for(u32 sphereIndex = 0;
+                    sphereIndex < ARRAY_SIZE(Spheres);
+                    sphereIndex++)
+            {
+                sphere sph = Spheres[sphereIndex];
                 
-                BackBuffer[y][x] = AsciiGradient[charIndex];
+                // (px - sx)^2 + (py - sy)^2 + ...
+                // this is the (px - sx) part. p - s, where p is the locus point and s is the sphere origin.
+                v3 cameraOriginRelativeToSphere = cameraOrigin - sph.Origin;
+
+                f32 a = glm::dot(rayDirection, rayDirection);
+                if(a == 0) continue;
+
+                f32 b = 2 * glm::dot(cameraOriginRelativeToSphere, rayDirection);
+                f32 c = glm::dot(cameraOriginRelativeToSphere, cameraOriginRelativeToSphere) - sph.SquaredRadius;
+
+                f32 det = (b*b) - (4 * a * c);
+                if(0 > det) continue;
+                f32 detSquareRoot = glm::sqrt(det);
+
+                f32 denom = 2 * a;
+
+                f32 t1 = (-b + detSquareRoot) / denom;
+                f32 t2 = (-b - detSquareRoot) / denom;
+
+                if(!IsValidT(t2)) t2 = FLT_MAX;
+                if(!IsValidT(t1)) t1 = FLT_MAX;
+
+                if(t1 == FLT_MAX && t2 == FLT_MAX) continue;
+                f32 t = MinF32(t1, t2);
+                char ch = GetAsciiChar(t);
+
+                BackBuffer[y][x] = GetAsciiChar(t);
             }
         }
     }
+}
 
-    for(s32 y = ScreenSize.y - 1;
-            y >= 0;
-            y--)
+int main()
+{
+    v3 cameraOrigin = {-10.0f, 0.0f , -10.0f};
+
+    while(1)
     {
-        printf("%.*s\n", SCREEN_X, BackBuffer[y]);
-    }
+        ClearBackBuffer();
+        RaycastScene(cameraOrigin);
+        SwapBackBuffers();
 
-    getchar();
-    cameraOrigin.y += 1.0f;
-
+        getchar();
+        cameraOrigin.y -= 1.0f;
     }
 }
