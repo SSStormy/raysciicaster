@@ -45,8 +45,8 @@ sphere Spheres[] = {
     { v3(0.0f, 0.0f, 0.0f), 4.0f }
 };
 
-#define SCREEN_X 150
-#define SCREEN_Y 50
+#define SCREEN_X 158
+#define SCREEN_Y 78
 static const iv2 ScreenSize = {SCREEN_X, SCREEN_Y};
 
 const char AsciiGradient[] = 
@@ -65,7 +65,7 @@ static inline
 void ClearBackBuffer()
 {
     printf("\033c");
-    memset(BackBuffer, 0, sizeof(BackBuffer));
+    memset(BackBuffer, ' ', sizeof(BackBuffer));
 }
 
 static inline
@@ -85,7 +85,7 @@ void SwapBackBuffers()
     }
 }
 
-static const f32 maxRayDistance = 256.0f;
+static const f32 maxRayDistance = 64.0f;
 
 static inline
 char GetAsciiChar(f32 t)
@@ -104,7 +104,7 @@ char GetAsciiChar(f32 t)
 static inline
 b32 IsValidT(f32 t)
 {
-    return t > 0 && maxRayDistance >= t;
+    return t >= 0.0f && maxRayDistance >= t;
 }
 
 static inline
@@ -117,19 +117,6 @@ f32 MinF32(f32 a, f32 b)
 static inline
 void RaycastScene(v3 cameraOrigin)
 {
-    v3 aspectRatioFix = {1.0f, 1.0f, 1.0f};
-
-    if(ScreenSize.x > ScreenSize.y)
-    {
-        aspectRatioFix.y = static_cast<f32>(ScreenSize.y) / static_cast<f32>(ScreenSize.x);
-    }
-    else if(ScreenSize.y > ScreenSize.x)
-    {
-        aspectRatioFix.x = static_cast<f32>(ScreenSize.x) / static_cast<f32>(ScreenSize.y);
-    }
-
-    printf("ARF %f %f\n", aspectRatioFix.x, aspectRatioFix.y);
-
     for(u32 y = 0;
             y < ScreenSize.y;
             y++)
@@ -148,7 +135,7 @@ void RaycastScene(v3 cameraOrigin)
             rayDirection = (rayDirection * 2.0f) - 1.0f;
 
             rayDirection.y *= -1.0f;
-            rayDirection *= aspectRatioFix;
+            rayDirection = glm::normalize(rayDirection);
 
             for(u32 planeIndex = 0;
                     planeIndex < ARRAY_SIZE(Planes);
