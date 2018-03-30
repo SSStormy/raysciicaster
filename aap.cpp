@@ -23,7 +23,7 @@ using s16 = int16_t;
 using s32 = int32_t;
 using s64 = int64_t;
 
-#define ARRAY_SIZE(M__ARRAY) (sizeof(M__ARRAY[0])/sizeof(M__ARRAY))
+#define ARRAY_SIZE(M__ARRAY) (sizeof(M__ARRAY)/sizeof(M__ARRAY[0]))
 
 struct plane
 {
@@ -37,12 +37,13 @@ struct sphere
     f32 SquaredRadius;
 };
 
-plane Planes[] = {
+static const plane Planes[] = {
     { v3(0.0f, 1.0f, 0.0f), 0.0f }
 };
 
-sphere Spheres[] = {
-    { v3(0.0f, 0.0f, 0.0f), 4.0f }
+static const sphere Spheres[] = {
+    { v3(0.0f, 0.0f, 0.0f), 4.0f },
+    { v3(4.0f, 8.0f, 4.0f), 8.0f }
 };
 
 #define SCREEN_X 158
@@ -50,14 +51,14 @@ sphere Spheres[] = {
 static const iv2 ScreenSize = {SCREEN_X, SCREEN_Y};
 
 const char AsciiGradient[] = 
-#if 0
+#if 1
 R"FOO($@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\|()1{}[]?-_+~<>i!lI;:,"^`'. )FOO"
 #else
 R"FOO(@%#*+=-:. )FOO"
 #endif
 ;
 
-const u32 AsciiGradientSize = sizeof(AsciiGradient) - 1;
+const u32 AsciiGradientSize = sizeof(AsciiGradient) - 2;
 
 char BackBuffer[SCREEN_Y][SCREEN_X] = {};
 
@@ -67,6 +68,8 @@ void ClearBackBuffer()
     printf("\033c");
     memset(BackBuffer, ' ', sizeof(BackBuffer));
 }
+
+static const f32 maxRayDistance = 256.0f;
 
 static inline
 void SwapBackBuffers()
@@ -85,18 +88,20 @@ void SwapBackBuffers()
     }
 }
 
-static const f32 maxRayDistance = 64.0f;
 
 static inline
 char GetAsciiChar(f32 t)
 {
+    t = t * t;
     static const f32 colorStep = 1.0f / AsciiGradientSize;
     f32 distance = t / maxRayDistance;
 
-    u32 charIndex = distance / colorStep;
+    s32 charIndex = distance / colorStep;
     
     if(charIndex > AsciiGradientSize)
         return AsciiGradient[AsciiGradientSize];
+    if(0 > charIndex)
+        return AsciiGradient[0];
 
     return AsciiGradient[charIndex];
 }
@@ -137,6 +142,8 @@ void RaycastScene(v3 cameraOrigin)
             rayDirection.y *= -1.0f;
             rayDirection = glm::normalize(rayDirection);
 
+            f32 finalT = FLT_MAX;
+
             for(u32 planeIndex = 0;
                     planeIndex < ARRAY_SIZE(Planes);
                     planeIndex++)
@@ -150,8 +157,8 @@ void RaycastScene(v3 cameraOrigin)
                 f32 t = topDot / botDot;
 
                 if(!IsValidT(t)) continue;
-
-                BackBuffer[y][x] = GetAsciiChar(t);
+                
+                finalT = MinF32(finalT, t);
             }
 
             for(u32 sphereIndex = 0;
@@ -184,9 +191,12 @@ void RaycastScene(v3 cameraOrigin)
 
                 f32 t = MinF32(t1, t2);
                 if(t == FLT_MAX) continue;
-
-                BackBuffer[y][x] = GetAsciiChar(t);
+                
+                finalT = MinF32(finalT, t);
             }
+
+            if(finalT != FLT_MAX && finalT >= -0.002f)
+                BackBuffer[y][x] = GetAsciiChar(finalT);
         }
     }
 }
