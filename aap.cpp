@@ -25,25 +25,37 @@ using s64 = int64_t;
 
 #define ARRAY_SIZE(M__ARRAY) (sizeof(M__ARRAY)/sizeof(M__ARRAY[0]))
 
+struct material
+{
+    b32 IsEmitter;
+};
+
 struct plane
 {
     v3 Normal;
     f32 Dist;
+    u32 MaterialIndex;
 };
 
 struct sphere
 {
     v3 Origin;
     f32 SquaredRadius;
+    u32 MaterialIndex;
+};
+
+static const material Materials[] = {
+    { false },
+    { true }
 };
 
 static const plane Planes[] = {
-    { v3(0.0f, 1.0f, 0.0f), 0.0f }
+    { v3(0.0f, 1.0f, 0.0f), 0.0f,  1}
 };
 
 static const sphere Spheres[] = {
-    { v3(0.0f, 0.0f, 0.0f), 4.0f },
-    { v3(4.0f, 8.0f, 4.0f), 8.0f }
+    { v3(0.0f, 0.0f, 0.0f), 4.0f, 0},
+    { v3(4.0f, 8.0f, 4.0f), 8.0f, 0}
 };
 
 #define SCREEN_X 158
@@ -109,7 +121,7 @@ char GetAsciiChar(f32 t)
 static inline
 b32 IsValidT(f32 t)
 {
-    return t >= 0.0f && maxRayDistance >= t;
+    return t > 0.002f && maxRayDistance >= t;
 }
 
 static inline
@@ -117,6 +129,102 @@ f32 MinF32(f32 a, f32 b)
 {
     if(a > b) return b;
     return a;
+}
+
+b32 IsBetterResult(f32 told, f32 tnew)
+{
+    return told > tnew;
+}
+
+static inline
+u8 SendRay(v3 origin, v3 direction, f32 distance)
+{
+    if(distance > maxRayDistance) return 255;
+
+    f32 finalT = FLT_MAX;
+    v3 normal = {0,0,0};
+    u32 materialIndex = 0;
+
+    for(u32 planeIndex = 0;
+            planeIndex < ARRAY_SIZE(Planes);
+            planeIndex++)
+    {
+        plane pln = Planes[planeIndex];
+
+        f32 topDot = -glm::dot(pln.Normal, origin) - pln.Dist;
+        f32 botDot = glm::dot(pln.Normal, direction);
+        if(botDot == 0) continue;
+
+        f32 t = topDot / botDot;
+
+        if(!IsValidT(t)) continue;
+
+        if(IsBetterResult(finalT, t))
+        {
+            finalT = t;
+            normal = pln.Normal;
+            materialIndex = pln.MaterialIndex;
+        }
+    }
+
+    for(u32 sphereIndex = 0;
+            sphereIndex < ARRAY_SIZE(Spheres);
+            sphereIndex++)
+    {
+        sphere sph = Spheres[sphereIndex];
+        
+        // (px - sx)^2 + (py - sy)^2 + ...
+        // this is the (px - sx) part. p - s, where p is the locus point and s is the sphere origin.
+        v3 cameraOriginRelativeToSphere = origin - sph.Origin;
+
+        f32 a = glm::dot(direction, direction);
+        if(a == 0.0f) continue;
+
+        f32 b = 2.0f * glm::dot(cameraOriginRelativeToSphere, direction);
+        f32 c = glm::dot(cameraOriginRelativeToSphere, cameraOriginRelativeToSphere) - sph.SquaredRadius;
+
+        f32 det = (b*b) - (4.0f * a * c);
+        if(0.0f > det) continue;
+        f32 detSquareRoot = glm::sqrt(det);
+
+        f32 denom = 2.0f * a;
+
+        f32 t1 = (-b + detSquareRoot) / denom;
+        f32 t2 = (-b - detSquareRoot) / denom;
+
+        if(!IsValidT(t2)) t2 = FLT_MAX;
+        if(!IsValidT(t1)) t1 = FLT_MAX;
+
+        f32 t = MinF32(t1, t2);
+        if(t == FLT_MAX) continue;
+        
+        if(IsBetterResult(finalT, t))
+        {
+            finalT = t;
+            materialIndex = sph.MaterialIndex;
+            v3 point = origin + (t * direction);
+            v3 radius = point - sph.Origin;
+            normal = glm::normalize(radius);
+        }
+    }
+
+    v3 point = origin + (finalT * direction);
+    f32 localDistance = glm::distance(point, origin);
+    distance += localDistance;
+
+    material mat = Materials[materialIndex];
+    if(!mat.IsEmitter) // reflective
+    {
+        v3 newDir = direction - (2.0f*((glm::dot(normal, direction) * normal)));
+        u8 result = SendRay(point, newDir, distance);
+
+        if(result == 255)
+        {
+            return GetAsciiChar(localDistance);
+        }
+    }
+
+    return GetAsciiChar(localDistance);
 }
 
 static inline
@@ -141,69 +249,15 @@ void RaycastScene(v3 cameraOrigin)
 
             rayDirection.y *= -1.0f;
             rayDirection = glm::normalize(rayDirection);
-
-            f32 finalT = FLT_MAX;
-
-            for(u32 planeIndex = 0;
-                    planeIndex < ARRAY_SIZE(Planes);
-                    planeIndex++)
-            {
-                plane pln = Planes[planeIndex];
-
-                f32 topDot = -glm::dot(pln.Normal, cameraOrigin) - pln.Dist;
-                f32 botDot = glm::dot(pln.Normal, rayDirection);
-                if(botDot == 0) continue;
-
-                f32 t = topDot / botDot;
-
-                if(!IsValidT(t)) continue;
-                
-                finalT = MinF32(finalT, t);
-            }
-
-            for(u32 sphereIndex = 0;
-                    sphereIndex < ARRAY_SIZE(Spheres);
-                    sphereIndex++)
-            {
-                sphere sph = Spheres[sphereIndex];
-                
-                // (px - sx)^2 + (py - sy)^2 + ...
-                // this is the (px - sx) part. p - s, where p is the locus point and s is the sphere origin.
-                v3 cameraOriginRelativeToSphere = cameraOrigin - sph.Origin;
-
-                f32 a = glm::dot(rayDirection, rayDirection);
-                if(a == 0.0f) continue;
-
-                f32 b = 2.0f * glm::dot(cameraOriginRelativeToSphere, rayDirection);
-                f32 c = glm::dot(cameraOriginRelativeToSphere, cameraOriginRelativeToSphere) - sph.SquaredRadius;
-
-                f32 det = (b*b) - (4.0f * a * c);
-                if(0.0f > det) continue;
-                f32 detSquareRoot = glm::sqrt(det);
-
-                f32 denom = 2.0f * a;
-
-                f32 t1 = (-b + detSquareRoot) / denom;
-                f32 t2 = (-b - detSquareRoot) / denom;
-
-                if(!IsValidT(t2)) t2 = FLT_MAX;
-                if(!IsValidT(t1)) t1 = FLT_MAX;
-
-                f32 t = MinF32(t1, t2);
-                if(t == FLT_MAX) continue;
-                
-                finalT = MinF32(finalT, t);
-            }
-
-            if(finalT != FLT_MAX && finalT >= -0.002f)
-                BackBuffer[y][x] = GetAsciiChar(finalT);
+            
+            BackBuffer[y][x] = SendRay(cameraOrigin, rayDirection, 0.0f);
         }
     }
 }
 
 int main()
 {
-    v3 cameraOrigin = {0.0f, 0.0f , -10.0f};
+    v3 cameraOrigin = {0.0f, 2.0f , -10.0f};
 
     while(1)
     {
