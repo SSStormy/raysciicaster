@@ -50,7 +50,8 @@ static const material Materials[] = {
 };
 
 static const plane Planes[] = {
-    { v3(0.0f, 1.0f, 0.0f), 0.0f,  1}
+    { v3(0.0f, 1.0f, 0.0f), 0.0f,  1},
+    { v3(0.707f, 0.707f, 0.0f), 0.0f,  0}
 };
 
 static const sphere Spheres[] = {
@@ -221,6 +222,10 @@ u8 SendRay(v3 origin, v3 direction, f32 distance)
         if(result == 255)
         {
             return GetAsciiChar(localDistance);
+        }
+        else
+        {
+            return result;
         }
     }
 
