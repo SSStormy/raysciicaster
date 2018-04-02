@@ -50,13 +50,13 @@ static const material Materials[] = {
 };
 
 static const plane Planes[] = {
-    { v3(0.0f, 1.0f, 0.0f), 0.0f,  1},
-    { v3(0.707f, 0.707f, 0.0f), 0.0f,  0}
+    { v3(0.0f, 1.0f, 0.0f), 0.0f,  1}
+//    { v3(0.707f, 0.707f, 0.0f), 0.0f,  0}
 };
 
 static const sphere Spheres[] = {
     { v3(0.0f, 0.0f, 0.0f), 4.0f, 0},
-    { v3(4.0f, 8.0f, 4.0f), 8.0f, 0}
+    { v3(-4.0f, 8.0f, 4.0f), 8.0f, 0}
 };
 
 #define SCREEN_X 158
@@ -138,9 +138,9 @@ b32 IsBetterResult(f32 told, f32 tnew)
 }
 
 static inline
-u8 SendRay(v3 origin, v3 direction, f32 distance)
+u8 SendRay(v3 origin, v3 direction, u8 bounce = 0)
 {
-    if(distance > maxRayDistance) return 255;
+    if(bounce > 20) return ' ';
 
     f32 finalT = FLT_MAX;
     v3 normal = {0,0,0};
@@ -204,29 +204,23 @@ u8 SendRay(v3 origin, v3 direction, f32 distance)
             finalT = t;
             materialIndex = sph.MaterialIndex;
             v3 point = origin + (t * direction);
-            v3 radius = point - sph.Origin;
-            normal = glm::normalize(radius);
+            normal = glm::normalize(point - sph.Origin);
         }
     }
 
+    if(finalT== FLT_MAX) return ' ';
+
     v3 point = origin + (finalT * direction);
     f32 localDistance = glm::distance(point, origin);
-    distance += localDistance;
 
     material mat = Materials[materialIndex];
     if(!mat.IsEmitter) // reflective
     {
         v3 newDir = direction - (2.0f*((glm::dot(normal, direction) * normal)));
-        u8 result = SendRay(point, newDir, distance);
+        newDir = glm::normalize(newDir);
+        u8 result = SendRay(point, newDir, bounce + 1);
 
-        if(result == 255)
-        {
-            return GetAsciiChar(localDistance);
-        }
-        else
-        {
-            return result;
-        }
+        return result;
     }
 
     return GetAsciiChar(localDistance);
@@ -255,7 +249,7 @@ void RaycastScene(v3 cameraOrigin)
             rayDirection.y *= -1.0f;
             rayDirection = glm::normalize(rayDirection);
             
-            BackBuffer[y][x] = SendRay(cameraOrigin, rayDirection, 0.0f);
+            BackBuffer[y][x] = SendRay(cameraOrigin, rayDirection);
         }
     }
 }
